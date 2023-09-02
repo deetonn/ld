@@ -3,7 +3,7 @@ using Language.Parsing;
 using System.Runtime.InteropServices;
 
 var path = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-    ? $"C:\\Users\\deeto\\source\\repos\\ld\\playground\\test_script.ld"
+    ? $"C:\\Users\\{Environment.UserName}\\source\\repos\\ld\\playground\\test_script.ld"
     : throw new NotImplementedException("add your path.");
 
 var fileInfo = new FileInfo(path);
