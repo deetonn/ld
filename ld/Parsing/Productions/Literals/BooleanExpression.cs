@@ -1,21 +1,21 @@
 ﻿
 using Language.Lexing;
 using Spectre.Console;
-using System.Text;
 
 namespace Language.Parsing.Productions.Literals;
 
-public record class VariableDotNotation(List<string> Path, SourceLocation Location)
+public record class BooleanExpression(bool Value, SourceLocation Location)
     : Expression(Location)
 {
     public override object Visit(IAstVisitor visitor)
     {
-        return visitor.VisitDotNotation(this);
+        return visitor.VisitBooleanExpression(this);
     }
 
     public override void Visualize(string indent, bool last)
     {
-        indent = ShowIndent(indent, last);
-        AnsiConsole.WriteLine(string.Join(".", Path));
+        _ = ShowIndent(indent, last);
+        string repr = Value ? "true" : "false";
+        AnsiConsole.WriteLine(repr);
     }
 }

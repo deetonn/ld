@@ -28,4 +28,6 @@ public record class Assignment(
         AnsiConsole.MarkupLine($"(Assignment of \"{Identifier}\", {mutable})");
         Expression?.Visualize(indent, true);
     }
+
+    public const string Discard = "$";
 }

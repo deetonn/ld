@@ -11,37 +11,39 @@ public class ErrorMessage
 
     public ErrorMessage(LdErrorCode code, string fileContents, SourceLocation location, string message, List<string>? notes = null)
     {
-        var allLines = fileContents.Split(Environment.NewLine);
+        var allLines = fileContents.Split(Environment.NewLine).Select(x => x.Replace("[", "[[").Replace("]", "]]")).ToArray();
         bool isOnFirstLine = location.Line == 0;
         bool canDisplayLineAbove = allLines.Length >= 2 && location.Line > 2;
         bool canUseNextLine = !((location.Line + 1) >= allLines.Length); 
 
         _message = new StringBuilder();
-        _message.AppendLine($"[red]error[[[italic]E{(int)code}[/]]][/]: {message}");
-        _message.AppendLine($" --> {location.File}:{location.Line}:{location.Column}");
+        _message.AppendLine($"[red]error[[[italic]E{(int)code}[/]]][/]: [bold white]{message}[/]");
+        _message.AppendLine($" --> [bold white]{location.File}:{location.Line}:{location.Column}[/]");
 
         if (!isOnFirstLine && canDisplayLineAbove)
         {
-            _message.AppendLine($" {location.Line - 1} | {allLines[location.Line - 2]}");
+            _message.AppendLine($" [red]{location.Line - 1}[/] | {allLines[location.Line - 2]}");
         }
 
         // This is the actual diagnostic location.
 
         // The amount of spacing before the "^^^^"
-        var padding = new string(' ', (int)location.Column);
+        var padding = new string(' ', location.Column > 4 ? ((int)location.Column - 4) : (int)location.Column);
         var arrowsPointingToContent = new string('^', (int)(location.Span.End - location.Span.Begin));
-        _message.AppendLine($" {location.Line} | {allLines[location.Line - 1]}");
-        _message.AppendLine($"   | {padding}{arrowsPointingToContent}");
+        var basePadding = 2 + location.Line.ToString().Length;
+        var paddingForEmptyLines = new string(' ', basePadding);
+        _message.AppendLine($" [red]{location.Line}[/] | {allLines[location.Line - 1]}");
+        _message.AppendLine($"{paddingForEmptyLines}| {padding}{arrowsPointingToContent}");
 
         if (canUseNextLine)
         {
-            _message.AppendLine($" {location.Line + 1} | {allLines[location.Line]}");
+            _message.AppendLine($" [red]{location.Line + 1}[/] | {allLines[location.Line]}");
         }
 
         if (notes is null) return;
         foreach (var note in notes)
         {
-            _message.AppendLine($"   = note: {note}");
+            _message.AppendLine($"{paddingForEmptyLines}= note: {note}");
         }
     }
 
@@ -62,7 +64,7 @@ public class WarningMessage
         bool canUseNextLine = !((location.Line + 1) >= allLines.Length);
 
         _message = new StringBuilder();
-        _message.AppendLine($"[orange]warning[/]: {message}");
+        _message.AppendLine($"[bold yellow on blue]warning[/]: {message}");
         _message.AppendLine($" --> {location.File}:{location.Line}:{location.Column}");
 
         if (!isOnFirstLine && canDisplayLineAbove)

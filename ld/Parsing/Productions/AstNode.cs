@@ -22,7 +22,7 @@ public record class AstNode(SourceLocation Location)
         throw new NotImplementedException($"please implement Visualize() for {GetType().Name}");
     }
 
-    protected static string ShowIndent(string indent, bool last)
+    public static string ShowIndent(string indent, bool last)
     {
         Console.Write(indent);
         if (last)

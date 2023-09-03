@@ -31,6 +31,7 @@ public static class LexerConstants
         ["use"] = TokenKind.Use,
         ["while"] = TokenKind.While,
         ["and"] = TokenKind.And,
+        ["__ld_runtime_break"] = TokenKind.DebugBreak
     };
 
     public const char EqualsSign = '=';
@@ -58,6 +59,9 @@ public static class LexerConstants
     public const char Percent = '%';
     public const char Pipe = '|';
     public const char Ampersand = '&';
+
+    public const char OpenBracket = '[';
+    public const char CloseBracket = ']';
 
     public const char EOF = '\0';
 
