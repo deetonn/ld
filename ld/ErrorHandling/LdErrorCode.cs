@@ -30,4 +30,8 @@ public enum LdErrorCode
     ExpectedLeftBracket,
     ExpectedCommaOrCloseBracket,
     ExpectedRightBracket,
+    ExpectedColonStructField,
+    ExpectedCommaOrCloseBrace,
+    OnlyFunctionsInImplStmts,
+    EnumVariantExpectedType
 }

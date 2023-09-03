@@ -1,4 +1,5 @@
 ﻿
+using Language.Api;
 using Language.Parsing.Productions;
 using Language.Parsing.Productions.Conditional;
 using Language.Parsing.Productions.Literals;
@@ -8,36 +9,65 @@ namespace Language.Parsing;
 
 public interface IAstVisitor
 {
-    object AndExpression(AndExpression andExpression);
-    object CopyVariable(CopiedVariable copiedVariable);
-    object ReferenceVariable(ReferencedVariable referencedVariable);
-    object Visit32BitInteger(Number32Bit number);
-    object Visit64BitInteger(Number64Bit number);
-    object VisitAddition(AdditionExpression additionExpression);
-    object VisitArrayLiteralExpression(ArrayLiteralExpression arrayLiteralExpression);
+    public object AndExpression(AndExpression andExpression);
+    public object CopyVariable(CopiedVariable copiedVariable);
+    public object ReferenceVariable(ReferencedVariable referencedVariable);
+    public object Visit32BitInteger(Number32Bit number);
+    public object Visit64BitInteger(Number64Bit number);
+    public object VisitAddition(AdditionExpression additionExpression);
+    public object VisitArrayLiteralExpression(ArrayLiteralExpression arrayLiteralExpression);
     public object VisitAssignment(Assignment assignment);
-    object VisitBitwiseAndExpression(BitwiseAndExpression bitwiseAndExpression);
-    object VisitBitwiseOrExpression(BitwiseOrExpression bitwiseOrExpression);
-    object VisitBlock(Block block);
-    object VisitBooleanExpression(BooleanExpression booleanExpression);
-    object VisitDivisionExpression(DivisionExpression divisionExpression);
-    object VisitDotNotation(VariableDotNotation variableDotNotation);
-    object VisitFloatingPointNumber(FloatingPointNumber floatingPointNumber);
-    object VisitFunctionCall(FunctionCall functionCall);
-    object VisitFunctionDeclaration(FunctionDeclaration functionDeclaration);
-    object VisitGrouping(GroupingExpression groupingExpression);
-    object VisitIfStatement(IfStatement ifStatement);
-    object VisitIsEqualToExpression(IsEqualToExpression isEqualToExpression);
-    object VisitIsGreaterEqualToExpression(IsGreaterEqualToExpression isGreaterEqualToExpression);
-    object VisitIsGreaterThanExpression(IsGreaterThanExpression isGreaterThanExpression);
-    object VisitIsLesserEqualToExpression(IsLesserEqualToExpression isLesserEqualToExpression);
-    object VisitIsLesserThanExpression(IsLesserThanExpression isLesserThanExpression);
-    object VisitIsNotEqualToExpression(IsNotEqualToExpression isNotEqualToExpression);
-    object VisitModuloExpression(ModuloExpression moduloExpression);
-    object VisitMultiplicationExpression(MultiplicationExpression multiplicationExpression);
-    object VisitNotExpression(NotExpression notExpression);
-    object VisitOrExpression(OrExpression orExpression);
-    object VisitReturnStatement(ReturnStatement returnStatement);
-    object VisitStringLiteral(StringLiteral stringLiteral);
-    object VisitSubtractionExpression(SubtractionExpression subtractionExpression);
+    public object VisitBitwiseAndExpression(BitwiseAndExpression bitwiseAndExpression);
+    public object VisitBitwiseOrExpression(BitwiseOrExpression bitwiseOrExpression);
+    public object VisitBlock(Block block);
+    public object VisitBooleanExpression(BooleanExpression booleanExpression);
+    public object VisitDivisionExpression(DivisionExpression divisionExpression);
+    public object VisitDotNotation(VariableDotNotation variableDotNotation);
+    public object VisitFloatingPointNumber(FloatingPointNumber floatingPointNumber);
+    public object VisitFunctionCall(FunctionCall functionCall);
+    public object VisitFunctionDeclaration(FunctionDeclaration functionDeclaration);
+    public object VisitGrouping(GroupingExpression groupingExpression);
+    public object VisitIfStatement(IfStatement ifStatement);
+    public object VisitIsEqualToExpression(IsEqualToExpression isEqualToExpression);
+    public object VisitIsGreaterEqualToExpression(IsGreaterEqualToExpression isGreaterEqualToExpression);
+    public object VisitIsGreaterThanExpression(IsGreaterThanExpression isGreaterThanExpression);
+    public object VisitIsLesserEqualToExpression(IsLesserEqualToExpression isLesserEqualToExpression);
+    public object VisitIsLesserThanExpression(IsLesserThanExpression isLesserThanExpression);
+    public object VisitIsNotEqualToExpression(IsNotEqualToExpression isNotEqualToExpression);
+    public object VisitModuloExpression(ModuloExpression moduloExpression);
+    public object VisitMultiplicationExpression(MultiplicationExpression multiplicationExpression);
+    public object VisitNotExpression(NotExpression notExpression);
+    public object VisitOrExpression(OrExpression orExpression);
+    public object VisitReturnStatement(ReturnStatement returnStatement);
+    public object VisitStringLiteral(StringLiteral stringLiteral);
+    public object VisitSubtractionExpression(SubtractionExpression subtractionExpression);
+
+    /// <summary>
+    /// Get the active scope.
+    /// </summary>
+    /// <returns>The current scope being used.</returns>
+    public LdScope ThisScope();
+
+    /// <summary>
+    /// Switch the context to a new scope. This will push the scope
+    /// into the scope stack. This requires you to call ExitContext.
+    /// </summary>
+    /// <param name="newContext">The new scope to switch into</param>
+    /// <returns>The previous scope.</returns>
+    public void SwitchContext(LdScope newContext);
+
+    /// <summary>
+    /// Remove the previous scope from the scope stack.
+    /// </summary>
+    /// <returns>The previous scope, once popped off the stack.</returns>
+    public LdScope ExitContext();
+    object VisitStructDeclaration(StructDeclaration structDeclaration);
+    object VisitStructFieldDeclaration(StructFieldDeclaration structFieldDeclaration);
+    object VisitImplStatement(ImplStatement implStatement);
+    object VisitStructInitialization(StructInitializationExpression structInitializationExpression);
+    object VisitEnumVariantDeclaration(EnumVariantDeclaration enumVariant);
+    object VisitEnumDeclaration(EnumDeclaration enumDeclaration);
+    object VisitColonNotation(ColonNotation colonNotation);
+    object VisitEnumVariantExpression(EnumVariantExpression enumVariantExpression);
+    object VisitStaticStructAccessExpression(StaticStructAccessExpression staticStructAccessExpression);
 }

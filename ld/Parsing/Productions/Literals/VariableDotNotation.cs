@@ -16,18 +16,6 @@ public record class VariableDotNotation(List<string> Path, SourceLocation Locati
     public override void Visualize(string indent, bool last)
     {
         indent = ShowIndent(indent, last);
-        var result = new StringBuilder();
-
-        for (int i = 0; i < result.Length; ++i)
-        {
-            if (i != result.Length - 1)
-            {
-                result.Append('.');
-            }
-
-            result.Append(Path[i]);
-        }
-
-        AnsiConsole.WriteLine(result.ToString());
+        AnsiConsole.WriteLine(string.Join(".", Path));
     }
 }
