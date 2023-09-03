@@ -17,25 +17,25 @@ public class ErrorMessage
         bool canUseNextLine = !((location.Line + 1) >= allLines.Length); 
 
         _message = new StringBuilder();
-        _message.AppendLine($"[red]error[[[italic]E{(int)code}[/]]][/]: {message}");
+        _message.AppendLine($"[red]error[[[italic]E{(int)code}[/]]][/]: [underline]{message}[/]");
         _message.AppendLine($" --> {location.File}:{location.Line}:{location.Column}");
 
         if (!isOnFirstLine && canDisplayLineAbove)
         {
-            _message.AppendLine($" {location.Line - 1} | {allLines[location.Line - 2]}");
+            _message.AppendLine($" [red]{location.Line - 1}[/] | {allLines[location.Line - 2]}");
         }
 
         // This is the actual diagnostic location.
 
         // The amount of spacing before the "^^^^"
-        var padding = new string(' ', (int)location.Column);
+        var padding = new string(' ', (int)location.Column - 4);
         var arrowsPointingToContent = new string('^', (int)(location.Span.End - location.Span.Begin));
-        _message.AppendLine($" {location.Line} | {allLines[location.Line - 1]}");
+        _message.AppendLine($" [red]{location.Line}[/] | {allLines[location.Line - 1]}");
         _message.AppendLine($"   | {padding}{arrowsPointingToContent}");
 
         if (canUseNextLine)
         {
-            _message.AppendLine($" {location.Line + 1} | {allLines[location.Line]}");
+            _message.AppendLine($" [red]{location.Line + 1}[/] | {allLines[location.Line]}");
         }
 
         if (notes is null) return;
@@ -62,7 +62,7 @@ public class WarningMessage
         bool canUseNextLine = !((location.Line + 1) >= allLines.Length);
 
         _message = new StringBuilder();
-        _message.AppendLine($"[orange]warning[/]: {message}");
+        _message.AppendLine($"[bold yellow on blue]warning[/]: {message}");
         _message.AppendLine($" --> {location.File}:{location.Line}:{location.Column}");
 
         if (!isOnFirstLine && canDisplayLineAbove)
