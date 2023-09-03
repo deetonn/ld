@@ -213,6 +213,11 @@ public class Lexer
                     }
                     return MakeToken(TokenKind.Ampersand);
                 }
+            case OpenBracket:
+                {
+                    return MakeToken(TokenKind.OpenBracket);
+                }
+            case CloseBracket: return MakeToken(TokenKind.CloseBracket);
             case Dot: return MakeToken(TokenKind.Dot);
             case var c when char.IsWhiteSpace(c): return null;
             case var c when char.IsNumber(c): return LexNumber(c);

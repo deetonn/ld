@@ -138,11 +138,12 @@ public enum TokenKind
     Arrow,
 
     Eof,
+    OpenBracket, CloseBracket,
 
     // Keywords
     Let, Const, Mut, Break, Continue, 
     If, Else, Enum, True, False, Fn, For,
     Impl, In, Loop, Match, Pub, Return,
     SelfValue, SelfType, Static, Struct, Trait,
-    Use, While
+    Use, While, DebugBreak,
 }
