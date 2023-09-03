@@ -3,6 +3,8 @@ using Language.Api;
 using Language.ErrorHandling;
 using Language.Lexing;
 using Language.Parsing.Productions;
+using Language.Parsing.Productions.Conditional;
+using Language.Parsing.Productions.Debugging;
 using Language.Parsing.Productions.Literals;
 using Language.Parsing.Productions.Math;
 using System.Diagnostics.CodeAnalysis;
@@ -32,6 +34,7 @@ public class Parser
         var identifier = Expect(TokenKind.Identifier, GetErrorBuilder()
             .WithMessage("expected an identifier. (while parsing type)")
             .WithNote("specify a typename.")
+            .WithCode(LdErrorCode.ExpectedIdentifier)
             .Build());
 
         var typeInfo = new TypeInformation(identifier.Lexeme!);
@@ -50,6 +53,7 @@ public class Parser
                     _ = Expect(TokenKind.Comma, GetErrorBuilder()
                         .WithMessage("expected comma seperating generic parameter.")
                         .WithNote($"add a comma after \"{genericParam.Name}\"")
+                        .WithCode(LdErrorCode.ExpectedComma)
                         .Build());
                 }
 
@@ -67,7 +71,16 @@ public class Parser
     {
         TokenKind.Plus, TokenKind.Minus, 
         TokenKind.Slash, TokenKind.Star,
-        TokenKind.Modulo
+        TokenKind.Modulo, TokenKind.Ampersand,
+        TokenKind.Pipe,
+    };
+
+    private readonly TokenKind[] _conditionalOperators = new TokenKind[]
+    {
+        TokenKind.EqualEqual, TokenKind.NotEqual,
+        TokenKind.Gt, TokenKind.Lt,
+        TokenKind.GreaterEquals, TokenKind.LesserEquals,
+        TokenKind.And, TokenKind.Or,
     };
 
     /// <summary>
@@ -102,11 +115,15 @@ public class Parser
             return ParsePrimaryExpression();
         }
 
-        // If the next is a LeftParen & the current is an Identifier
-        // this is definately a function call.
-        if (next.Kind is TokenKind.LeftParen && current.Kind is TokenKind.Identifier)
+        if (current.Kind == TokenKind.Bang)
         {
-            return ParseFunctionCall();
+            _ = MoveNext();
+            var expr = ParseExpression() ?? throw ParseError(GetErrorBuilder()
+                .WithMessage("expected expression after bang (\"!\") operator.")
+                .WithCode(LdErrorCode.ExpectedExpression)
+                .WithNote("the bang operator inverts a boolean value, there must be an expression to invert.")
+                .Build());
+            return new NotExpression(expr, current.Location);
         }
 
         // If the next token is a mathematical operator, this
@@ -114,6 +131,11 @@ public class Parser
         if (_mathTokens.Contains(next.Kind))
         {
             return ParseMathExpression();
+        }
+
+        if (_conditionalOperators.Contains(next.Kind))
+        {
+            return ParseConditional();
         }
 
         // If the next token is a dot, this is a variable access.
@@ -138,6 +160,46 @@ public class Parser
         return ParsePrimaryExpression();
     }
 
+    public Expression ParseConditional()
+    {
+        var opString = PeekNext()?.Kind.ToString() ?? "unknown-op";
+
+        // NOTE: for now just handle basic conditional operations.
+        var leftExpr = ParsePrimaryExpression() ?? throw ParseError(GetErrorBuilder()
+            .WithMessage("expected expression on the left of conditional operator.")
+            .WithCode(LdErrorCode.ExpectedExpression)
+            .WithNote($"the operator \"{opString}\" takes one argument on the left and another on the right.")
+            .Build());
+
+        var @operator = PeekThenAdvance() ?? throw ParseError(GetErrorBuilder()
+            .WithMessage("expected operand left of expression.")
+            .WithCode(LdErrorCode.ExpectedExpression)
+            .WithNote("expected an operator here.")
+            .Build());
+
+        var rightExpr = ParsePrimaryExpression() ?? throw ParseError(GetErrorBuilder()
+            .WithMessage("expected expression right of operator \"{opString}\".")
+            .WithCode(LdErrorCode.ExpectedExpression)
+            .Build());
+
+        return @operator.Kind switch
+        {
+            TokenKind.EqualEqual => new IsEqualToExpression(leftExpr, rightExpr, @operator.Location),
+            TokenKind.NotEqual => new IsNotEqualToExpression(leftExpr, rightExpr, @operator.Location),
+            TokenKind.Gt => new IsGreaterThanExpression(leftExpr, rightExpr, @operator.Location),
+            TokenKind.Lt => new IsLesserThanExpression(leftExpr, rightExpr, @operator.Location),
+            TokenKind.GreaterEquals => new IsGreaterEqualToExpression(leftExpr, rightExpr, @operator.Location),
+            TokenKind.LesserEquals => new IsLesserEqualToExpression(leftExpr, rightExpr, @operator.Location),
+            TokenKind.And => new AndExpression(leftExpr, rightExpr, @operator.Location),
+            TokenKind.Or => new OrExpression(leftExpr, rightExpr, @operator.Location),
+            _ => throw ParseError(GetErrorBuilder()
+            .WithMessage($"unknown operand type \"{@operator.Kind}\".")
+            .WithCode(LdErrorCode.UnknownOperand)
+            .WithNote($"supported operands are: [[{string.Join(", ", _conditionalOperators.Select(x => x.ToString()))}]]")
+            .Build())
+        };
+    }
+
     public Expression ParseMathExpression()
     {
         // NOTE: math expressions just boil down to
@@ -146,17 +208,20 @@ public class Parser
 
         // NOTE[2]: Actual groupings are not supported yet.
 
-        var leftExpr = ParseExpression() ?? throw ParseError(GetErrorBuilder()
+        var leftExpr = ParsePrimaryExpression() ?? throw ParseError(GetErrorBuilder()
             .WithMessage("expected expression due to mathematical operator.")
+            .WithCode(LdErrorCode.ExpectedExpressionReasonMathematical)
             .Build());
-        var @operator = Peek() ?? throw ParseError(GetErrorBuilder()
+        var @operator = PeekThenAdvance() ?? throw ParseError(GetErrorBuilder()
             .WithMessage("unexpected EOF during parsing a math expression")
             .WithNote("finish the expression.")
+            .WithCode(LdErrorCode.UnexpectedEOF)
             .Build());
 
-        var rightExpr = ParseExpression() ?? throw ParseError(GetErrorBuilder()
+        var rightExpr = ParsePrimaryExpression() ?? throw ParseError(GetErrorBuilder()
             .WithMessage("expected expression due to mathematical operator.")
-            .WithNote($"due to operator \"{@operator.Location}\", an expression was expected.")
+            .WithNote($"due to operator \"{@operator.Kind}\", an expression was expected.")
+            .WithCode(LdErrorCode.ExpectedExpressionReasonMathematical)
             .Build());
 
         return @operator.Kind switch
@@ -166,8 +231,12 @@ public class Parser
             TokenKind.Slash => new DivisionExpression(leftExpr, rightExpr, @operator.Location),
             TokenKind.Star => new DivisionExpression(leftExpr, rightExpr, @operator.Location),
             TokenKind.Modulo => new ModuloExpression(leftExpr, rightExpr, @operator.Location),
+            TokenKind.Ampersand => new BitwiseAndExpression(leftExpr, rightExpr, @operator.Location),
+            TokenKind.Pipe => new BitwiseOrExpression(leftExpr, rightExpr, @operator.Location),
             _ => throw ParseError(GetErrorBuilder()
                 .WithMessage("unrecognized operator.")
+                .WithNote($"The operator \"{@operator.Kind}\" is unknown in this context.")
+                .WithCode(LdErrorCode.UnrecognizedOperator)
                 .Build())
         };
     }
@@ -185,6 +254,7 @@ public class Parser
             var possiblyRightParen = Peek() ?? throw ParseError(GetErrorBuilder()
                     .WithMessage("expected expression or \")\" after \"(\".")
                     .WithNote("reached EOF while parsing function call.")
+                    .WithCode(LdErrorCode.UnexpectedEOF)
                     .Build());
 
             if (possiblyRightParen.Kind == TokenKind.RightParen)
@@ -202,22 +272,24 @@ public class Parser
             var expression = ParseExpression() ?? throw ParseError(GetErrorBuilder()
                 .WithMessage("function arguments can only be expressions.")
                 .WithNote("could not parse an expression here.")
+                .WithCode(LdErrorCode.ArgumentsCanOnlyBeExpressions)
                 .Build());
             var nextToken = PeekThenAdvance() ?? throw ParseError(GetErrorBuilder()
                 .WithMessage("expected expression or right-paren within function arguments.")
+                .WithCode(LdErrorCode.ExpectedExpressionOrRightParen)
                 .Build());
 
             if (nextToken.Kind != TokenKind.Comma)
             {
                 if (nextToken.Kind is TokenKind.RightParen)
                 {
-                    _ = MoveNext();
                     break;
                 }
 
                 throw ParseError(GetErrorBuilder()
                     .WithMessage($"expected a comma after this expression.")
                     .WithNote("because there is another argument, you must add a comma to seperate them.")
+                    .WithCode(LdErrorCode.ExpectedComma)
                     .Build());
             }
 
@@ -241,12 +313,14 @@ public class Parser
             var nextIdentifier = Peek() ?? throw ParseError(GetErrorBuilder()
                     .WithMessage("expected an identifier after \".\"")
                     .WithNote("did you forget to reference something?")
+                    .WithCode(LdErrorCode.ExpectedIdentifier)
                     .Build());
             _ = MoveNext();
             if (nextIdentifier.Kind != TokenKind.Identifier)
             {
                 throw ParseError(GetErrorBuilder()
-                    .WithMessage($"expected an identifier, but got \"{nextIdentifier.Lexeme}\"")
+                    .WithMessage($"expected an identifier, but got \"{nextIdentifier.Kind}\"")
+                    .WithCode(LdErrorCode.ExpectedIdentifier)
                     .Build());
             }
             identifiers.Add(nextIdentifier.Lexeme!);
@@ -273,6 +347,7 @@ public class Parser
                 throw ParseError(GetErrorBuilder()
                     .WithMessage("invalid float literal.")
                     .WithNote($"failed to parse simplified float \"{numberWithoutFCharacter}\".")
+                    .WithCode(LdErrorCode.InvalidFloatLiteral)
                     .Build());
             }
 
@@ -296,6 +371,7 @@ public class Parser
             .WithMessage("invalid number literal.")
             .WithNote($"the literal \"[red italic]{number}[/]\" is not recognized as")
             .WithNote("any of the following types: (u32, i32, u64, i64, f64, f32)")
+            .WithCode(LdErrorCode.UnknownNumberLiteral)
             .Build());
     }
 
@@ -304,6 +380,11 @@ public class Parser
         if (Matches(TokenKind.Number))
         {
             return ParseNumber();
+        }
+
+        if (Matches(TokenKind.OpenBracket))
+        {
+            return ParseArrayLiteralExpression();
         }
 
         if (Matches(TokenKind.StringLiteral))
@@ -319,11 +400,73 @@ public class Parser
             var identifier = Peek()!;
             // short circuit, no need to add a new function for something
             // this simple.
+            var next = PeekNext();
+
+            if (next is not null && next.Kind == TokenKind.LeftParen)
+            {
+                // TODO: Currently function calls on the left
+                //       of any operator cause ParseExpression
+                //       to fail.
+                return ParseFunctionCall();
+            }
+
             _ = MoveNext();
             return new CopiedVariable(identifier.Lexeme!, identifier.Location);
         }
 
+        if (Matches(TokenKind.True))
+        {
+            _ = MoveNext();
+            return new BooleanExpression(true, Peek()!.Location);
+        }
+
+        if (Matches(TokenKind.False))
+        {
+            _ = MoveNext();
+            return new BooleanExpression(false, Peek()!.Location);
+        }
+
         return null;
+    }
+
+    public ArrayLiteralExpression ParseArrayLiteralExpression()
+    {
+        var leftBracket = PeekThenAdvance() ?? throw ParseError(GetErrorBuilder()
+            .WithMessage("expected \"[\" to begin array literal.")
+            .WithCode(LdErrorCode.ExpectedLeftBracket)
+            .WithNote("array syntax is like: [1, 2, 3, 4]")
+            .Build());
+
+        var expressions = new List<Expression>();
+
+        while (!Matches(TokenKind.CloseBracket))
+        {
+            var expression = ParseExpression() ?? throw ParseError(GetErrorBuilder()
+                 .WithMessage("expected expression within array literal.")
+                 .WithCode(LdErrorCode.ExpectedExpression)
+                 .Build());
+
+            expressions.Add(expression);
+
+            if (Matches(TokenKind.Comma))
+            {
+                _ = MoveNext();
+            }
+            else if (!Matches(TokenKind.CloseBracket))
+            {
+                throw ParseError(GetErrorBuilder()
+                     .WithMessage("expected comma or closing bracket.")
+                     .WithCode(LdErrorCode.ExpectedCommaOrCloseBracket)
+                     .Build());
+            }
+        }
+
+        _ = PeekThenAdvance() ?? throw ParseError(GetErrorBuilder()
+            .WithMessage("expected \"]\" to close array literal.")
+            .WithCode(LdErrorCode.ExpectedRightBracket)
+            .Build());
+
+        return new ArrayLiteralExpression(expressions, leftBracket.Location);
     }
 
     public Assignment ParseAssignment()
@@ -331,6 +474,7 @@ public class Parser
         _ = Expect(TokenKind.Let, GetErrorBuilder()
             .WithMessage("expected \"let\" keyword.")
             .WithSourceLocation(GetCurrentSourceLocation())
+            .WithCode(LdErrorCode.ExpectedKeyword)
             .Build());
 
         Token? mutKeyword = null;
@@ -346,6 +490,7 @@ public class Parser
         var identifier = Expect(TokenKind.Identifier, GetErrorBuilder()
             .WithMessage($"expected an identifier after \"{previousKeyword}\".")
             .WithNote("an identifier is anything A-z-0-9 including underscores.")
+            .WithCode(LdErrorCode.ExpectedIdentifier)
             .Build());
 
         TypeInformation? specifiedType = null;
@@ -373,18 +518,18 @@ public class Parser
 
     public Block ParseBlock()
     {
-        var shouldBeleftBrace = Peek() ?? throw ParseError(GetErrorBuilder()
+        var shouldBeleftBrace = PeekThenAdvance() ?? throw ParseError(GetErrorBuilder()
             .WithMessage("unexpected EOF while parsing block.")
+            .WithCode(LdErrorCode.UnexpectedEOF)
             .Build());
 
         if (shouldBeleftBrace.Kind != TokenKind.LeftBrace)
         {
             throw ParseError(GetErrorBuilder()
                 .WithMessage("expected left brace to begin block.")
+                .WithCode(LdErrorCode.ExpectedLeftBrace)
                 .Build());
         }
-
-        _ = MoveNext();
 
         var nodes = new List<AstNode>();
 
@@ -393,6 +538,7 @@ public class Parser
             var nextToken = Peek() ?? throw ParseError(GetErrorBuilder()
                 .WithMessage("expected a right brace to close block.")
                 .WithNote("encountered EOF while parsing a block.")
+                .WithCode(LdErrorCode.UnexpectedEOF)
                 .Build());
 
             if (nextToken.Kind == TokenKind.RightBrace)
@@ -419,10 +565,12 @@ public class Parser
     {
         var identifier = PeekThenAdvance() ?? throw ParseError(GetErrorBuilder()
             .WithMessage("expected identifier for function parameter.")
+            .WithCode(LdErrorCode.ExpectedIdentifier)
             .Build());
 
         _ = Expect(TokenKind.Colon, GetErrorBuilder()
             .WithMessage("expected \":\" after function parameter identifier.")
+            .WithCode(LdErrorCode.ExpectedColonFnArgs)
             .Build());
 
         var type = ParseTypename();
@@ -434,11 +582,13 @@ public class Parser
     {
         var fnKeyword = PeekThenAdvance() ?? throw ParseError(GetErrorBuilder()
             .WithMessage("expected \"fn\" keyword but encountered EOF.")
+            .WithCode(LdErrorCode.UnexpectedEOF)
             .Build());
 
         var identifier = PeekThenAdvance() ?? throw ParseError(GetErrorBuilder()
             .WithMessage("expected identifier after \"fn\" keyword.")
             .WithNote("got EOF after function declarator keyword.")
+            .WithCode(LdErrorCode.UnexpectedEOF)
             .Build());
 
         if (identifier.Kind != TokenKind.Identifier)
@@ -446,6 +596,7 @@ public class Parser
             throw ParseError(GetErrorBuilder()
                 .WithMessage("expected identifier after \"fn\" keyword.")
                 .WithNote("example: fn identifier() {}")
+                .WithCode(LdErrorCode.ExpectedIdentifier)
                 .Build());
         }
 
@@ -464,11 +615,14 @@ public class Parser
             }
             _ = Expect(TokenKind.Gt, GetErrorBuilder()
                 .WithMessage("expected \">\" after generic parameters.")
+                .WithCode(LdErrorCode.ExpectedClosingGenericCroc)
+                .WithNote("generic parameters must close with a left angle bracket.")
                 .Build());
         }
 
         _ = Expect(TokenKind.LeftParen, GetErrorBuilder()
             .WithMessage("expected \"(\" after function name.")
+            .WithCode(LdErrorCode.ExpectedLeftParen)
             .Build());
 
         var parameters = new List<FunctionDeclarationParameter>();
@@ -483,6 +637,7 @@ public class Parser
         }
         _ = Expect(TokenKind.RightParen, GetErrorBuilder()
             .WithMessage("expected \")\" after function parameters.")
+            .WithCode(LdErrorCode.ExpectedRightParen)
             .Build());
 
         TypeInformation? returnType = null;
@@ -491,6 +646,7 @@ public class Parser
         {
             _ = Expect(TokenKind.Arrow, GetErrorBuilder()
                 .WithMessage("expected \"->\" after function parameters.")
+                .WithCode(LdErrorCode.ExpectedArrow)
                 .Build());
 
             returnType = ParseTypename();
@@ -506,6 +662,7 @@ public class Parser
         var retKeyword = PeekThenAdvance() ?? throw ParseError(GetErrorBuilder()
             .WithMessage("expected return keyword")
             .WithNote("got EOF while parsing return statement.")
+            .WithCode(LdErrorCode.UnexpectedEOF)
             .Build());
 
         var expression = ParseExpression();
@@ -513,8 +670,53 @@ public class Parser
         return new ReturnStatement(expression, retKeyword.Location);
     }
 
+    public IfStatement ParseIfStatement()
+    {
+        var ifKeyword = PeekThenAdvance() ?? throw ParseError(GetErrorBuilder()
+            .WithMessage("expected \"if\" keyword but got EOF.")
+            .WithCode(LdErrorCode.UnexpectedEOF)
+            .Build());
+
+        var expression = ParseExpression() ?? throw ParseError(GetErrorBuilder()
+            .WithMessage("expected expression due to previous \"if\" keyword.")
+            .WithCode(LdErrorCode.ExpectedExpression)
+            .WithNote("there is nothing to evaluate")
+            .Build());
+
+        var ifBlock = ParseBlock() ?? throw ParseError(GetErrorBuilder()
+            .WithMessage("expected block after if statement.")
+            .WithNote("there is no point of the \"if\" without conditional code.")
+            .WithCode(LdErrorCode.ExpectedBlockAfterIf)
+            .Build());
+
+        Block? elseBlock = null;
+        if (Matches(TokenKind.Else))
+        {
+            // NOTE: because of the previous match, this never fails.
+            //       that is why the error message is so bleak.
+            var _ = PeekThenAdvance() ?? throw ParseError(GetErrorBuilder()
+                .WithMessage("expected else keyword.")
+                .WithCode(LdErrorCode.ExpectedKeyword)
+                .Build());
+
+            elseBlock = ParseBlock() ?? throw ParseError(GetErrorBuilder()
+                .WithMessage("expected block after \"else\" keyword")
+                .WithCode(LdErrorCode.ExpectedBlockAfterElse)
+                .WithNote("There is no point of an else statement without a block of conditional code.")
+                .Build());
+        }
+
+        return new IfStatement(expression, ifBlock, elseBlock, ifKeyword.Location);
+    }
+
     public Statement ParseStatement()
     {
+        if (Matches(TokenKind.DebugBreak))
+        {
+            _ = new ParserDebugBreakExpression();
+            _ = MoveNext();
+        }
+
         if (Matches(TokenKind.Let))
         {
             return ParseAssignment();
@@ -525,6 +727,11 @@ public class Parser
             return ParseReturnStatement();
         }
 
+        if (Matches(TokenKind.If))
+        {
+            return ParseIfStatement();
+        }
+
         if (Matches(TokenKind.Eof))
         {
             throw new ParserDoneException();
@@ -533,6 +740,7 @@ public class Parser
         ParseError(GetErrorBuilder()
             .WithMessage($"The token type \"{Peek()?.Kind}\" was unexpected here.")
             .WithNote("This is either invalid syntax, or the token kind is not handled yet.")
+            .WithCode(LdErrorCode.UnexpectedToken)
             .Build());
 
         return null!;
@@ -593,6 +801,7 @@ public class Parser
         {
             ParseError(GetErrorBuilder()
                 .WithMessage("unexpected eof.")
+                .WithCode(LdErrorCode.UnexpectedEOF)
                 .WithSourceLocation(_tokens[_position - 1].Location)
                 .Build());
             return null!;
@@ -661,15 +870,8 @@ public class Parser
         {
             return _tokens[_position];
         }
-        var error = GetErrorBuilder()
-            .WithMessage("expected another token, but reached EOF.")
-            .WithSourceLocation(_tokens[_position - 2].Location)
-            .WithNote("Add something after the previous token.")
-            .Build();
-        ErrorHandler.QueueNow(error);
-        // Always exits.
-        ErrorHandler.DisplayThenExitIfAny();
-        return null!;
+        // just return the last token so EOF can be handled.
+        return _tokens[^1];
     }
     private ErrorBuilder GetErrorBuilder()
     {
