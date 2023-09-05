@@ -1,11 +1,12 @@
 ﻿
+using Language.Api;
 using Language.Lexing;
 using Spectre.Console;
 
 namespace Language.Parsing.Productions;
 
-public record class StaticStructAccessExpression(
-    string StructName, string FunctionName, List<Expression>? Arguments,
+public record class StaticStructFunctionCallExpression(
+    string StructName, string FunctionName, List<TypeInformation>? Generics, List<Expression>? Arguments,
     SourceLocation Location
 ) : Expression(Location)
 {
