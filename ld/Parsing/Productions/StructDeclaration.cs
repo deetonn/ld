@@ -6,7 +6,7 @@ using Spectre.Console;
 namespace Language.Parsing.Productions;
 
 public record class StructFieldDeclaration(string Identifier, TypeInformation Type, SourceLocation Location)
-    : Declaration(Location)
+    : Declaration(Identifier, Location)
 {
     public override object Visit(IAstVisitor visitor)
     {
@@ -21,7 +21,7 @@ public record class StructFieldDeclaration(string Identifier, TypeInformation Ty
 }
 
 public record class StructDeclaration(string Identifier, List<StructFieldDeclaration> Fields, SourceLocation Location)
-    : Declaration(Location)
+    : Declaration(Identifier, Location)
 {
     public override object Visit(IAstVisitor visitor)
     {

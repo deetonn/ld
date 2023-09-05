@@ -6,7 +6,7 @@ using Spectre.Console;
 namespace Language.Parsing.Productions;
 
 public record class EnumVariantDeclaration(string Name, List<TypeInformation>? TaggedTypes, SourceLocation Location)
-    : Declaration(Location)
+    : Declaration(Name, Location)
 {
     public override object Visit(IAstVisitor visitor)
     {
@@ -21,8 +21,8 @@ public record class EnumVariantDeclaration(string Name, List<TypeInformation>? T
     }
 }
 
-public record class EnumDeclaration(string Identifier, List<EnumVariantDeclaration>? Variants, SourceLocation Location)
-    : Declaration(Location)
+public record class EnumDeclaration(string Identifier, List<TypeInformation>? Generics, List<EnumVariantDeclaration>? Variants, SourceLocation Location)
+    : Declaration(Identifier, Location)
 {
     public override object Visit(IAstVisitor visitor)
     {

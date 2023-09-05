@@ -25,7 +25,7 @@ public record class FunctionDeclaration(
     TypeInformation? ReturnType,
     Block Body,
     SourceLocation Location
-): Declaration(Location)
+): Declaration(Identifier, Location)
 {
     public override object Visit(IAstVisitor visitor)
     {
