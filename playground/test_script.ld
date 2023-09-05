@@ -1,29 +1,20 @@
 
-fn identifier(data: u32) -> u32 {
-  return 2
+struct Data {
+  data: u32
 }
 
-struct ParseError {
-  message: String,
-  code: u64
+impl Data {
+  fn get<T>() -> T {
+    return 0
+  }
 }
 
-struct Node {
-  expression: Box<Expression>
+fn get<T>() -> T {
+  // trait defined generic functions have different syntax
+  // to regular generic functions.
+  return Data::get<T>::()
 }
-
-enum ParseResult {
-  AstNode(Node),
-  Failure(ParseError)
-}
-
-let result = ParseResult::Failure(ParseError {
-  message: "Failure!",
-  code: 0
-})
 
 fn main() {
-  if result == identifier() {
-    println("ok")
-  }
+  let data = get::<bool>()
 }
