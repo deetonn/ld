@@ -1,13 +1,15 @@
 ﻿
 using Language.Api;
 using Language.ErrorHandling;
+using Language.Extensions;
 using Language.Lexing;
 using Language.Parsing.Productions;
 using Language.Parsing.Productions.Conditional;
 using Language.Parsing.Productions.Debugging;
 using Language.Parsing.Productions.Literals;
 using Language.Parsing.Productions.Math;
-
+using System.Collections.Immutable;
+using System.Runtime.InteropServices;
 
 namespace Language.Parsing;
 
@@ -15,21 +17,25 @@ public class ParserDoneException : Exception { }
 
 public class Parser
 {
-    private List<Token> _tokens;
-    private List<AstNode> _ast;
+    private readonly List<Token> _tokens;
+    private readonly HashSet<AstNode> _ast;
     private int _position;
-    private string _source;
-    private SortedSet<string> _enumNames;
-    private SortedSet<string> _structNames;
+    private readonly string _source;
+    private readonly HashSet<string> _enumNames;
+    private readonly HashSet<string> _structNames;
+    private readonly ProjectDetails _project;
+    private readonly string _fileName;
 
-    public Parser(List<Token> tokens, string source)
+    public Parser(string fileName, ProjectDetails project, List<Token> tokens, string source)
     {
+        _fileName = fileName;
+        _project = project;
         _tokens = tokens;
         _position = 0;
-        _ast = new List<AstNode>();
+        _ast = new HashSet<AstNode>();
         _source = source;
-        _enumNames = new SortedSet<string>();
-        _structNames = new SortedSet<string>();
+        _enumNames = new HashSet<string>();
+        _structNames = new HashSet<string>();
     }
 
     public void RememberEnumDeclaration(string name) 
@@ -201,7 +207,7 @@ public class Parser
                 throw ParseError(GetErrorBuilder()
                     .WithMessage("unknown token during inline struct initialization.")
                     .WithCode(LdErrorCode.UnexpectedToken)
-                    .WithNote("expected comma or right brace.")
+                    .WithNote($"expected comma or right brace, but got \"{nextPeeked?.Kind}\"")
                     .Build());
             }
         }
@@ -431,7 +437,7 @@ public class Parser
             {
                 _ = MoveNext();
                 // nice little short-circuit.
-                return new FunctionCall(identifierToken.Lexeme!, null, identifierToken.Location);
+                return new FunctionCall(identifierToken.Lexeme!, null, null, identifierToken.Location);
             }
         } // end short-circuit.
 
@@ -474,7 +480,7 @@ public class Parser
             arguments.Add(expression);
         }
 
-        return new FunctionCall(identifierToken.Lexeme!, arguments, identifierToken.Location);
+        return new FunctionCall(identifierToken.Lexeme!, null, arguments, identifierToken.Location);
     }
 
     /// <summary>
@@ -597,7 +603,62 @@ public class Parser
         return expressions;
     }
 
+    public FunctionCall ParseGenericFunctionCall()
     {
+        var identifier = Expect(TokenKind.Identifier, GetErrorBuilder()
+            .WithMessage("expected identifier at start of generic function call")
+            .WithCode(LdErrorCode.ExpectedIdentifier)
+            .Build());
+
+        var _ = Expect(TokenKind.ColonColon, GetErrorBuilder()
+            .WithMessage("expected \"::\" after identifier.")
+            .WithCode(LdErrorCode.ExpectedDoubleColon)
+            .Build());
+
+        _ = Expect(TokenKind.Lt, GetErrorBuilder()
+            .WithMessage("expected \"<\" to start generic argument list.")
+            .WithCode(LdErrorCode.ExpectedLt)
+            .Build());
+
+        var suppliedTypes = new List<TypeInformation>();
+        while (true)
+        {
+            var typeName = ParseTypename();
+            suppliedTypes.Add(typeName);
+            var next = Peek();
+
+            if (next is not null && next.Kind == TokenKind.Comma)
+            {
+                _ = MoveNext();
+                continue;
+            }
+            else if (next is not null && next.Kind == TokenKind.Gt)
+            {
+                _ = MoveNext();
+                break;
+            }
+
+            throw ParseError(GetErrorBuilder()
+                .WithMessage("expected \",\" or \">\" after generic parameter.")
+                .WithCode(LdErrorCode.ExpectedCommaOrCloseCroc)
+                .Build());
+        }
+
+        _ = Expect(TokenKind.LeftParen, GetErrorBuilder()
+            .WithMessage("expect left paren to begin function arguments.")
+            .WithCode(LdErrorCode.ExpectedLeftParen)
+            .Build());
+
+        var argumentList = ParseArgumentList();
+
+        _ = Expect(TokenKind.RightParen, GetErrorBuilder()
+            .WithMessage("expect right paren to end function arguments.")
+            .WithCode(LdErrorCode.ExpectedRightParen)
+            .Build());
+
+        return new FunctionCall(identifier.Lexeme!, suppliedTypes, argumentList, identifier.Location);
+    }
+
     /// <summary>
     /// This will parse a primary expression. A primary is expression is any of the follwing.
     /// EnumVariantExpression (Enum::Variant(...)), StaticStructAccessExpression (Struct::function(...)),
@@ -613,7 +674,21 @@ public class Parser
         if (current is not null && current.Kind == TokenKind.Identifier
             && next is not null && next.Kind == TokenKind.ColonColon)
         {
+            var possiblyStartOfGenericFunctionCall = PeekAheadBy(2);
+
+            if (possiblyStartOfGenericFunctionCall is not null
+                && possiblyStartOfGenericFunctionCall.Kind == TokenKind.Lt)
+            {
+                return ParseGenericFunctionCall();
+            }
+
             var colonNotation = ParseColonNotation();
+
+            if (colonNotation.Path.Count != 2)
+            {
+                return colonNotation;
+            }
+
             // check for parens.
             current = Peek();
             if (current is not null && current.Kind == TokenKind.LeftParen)
@@ -641,9 +716,77 @@ public class Parser
                         .WithCode(LdErrorCode.ExpectedRightParen)
                         .Build());
 
-                    return new StaticStructAccessExpression(colonNotation.Path[0],
-                        colonNotation.Path[1], argumentList, colonNotation.Location);
+                    return new StaticStructFunctionCallExpression(colonNotation.Path[0],
+                        colonNotation.Path[1], null, argumentList, colonNotation.Location);
                 }
+
+                throw ParseError(GetErrorBuilder()
+                    .WithMessage($"colon notation is only supported on structs and enums.")
+                    .WithCode(LdErrorCode.ColonNotationOnStructsAndEnums)
+                    .WithNote($"\"{firstInColonNotation}\" is not an enum or struct.")
+                    .Build());
+            }
+            // TODO: change this syntax to be
+            //       Struct::function<T1, ..., TN>::(args...)
+            if (current is not null && current.Kind == TokenKind.Lt)
+            {
+                _ = MoveNext(); // consume "<"
+
+                var types = new List<TypeInformation>();
+
+                while (true)
+                {
+                    var typeName = ParseTypename();
+                    types.Add(typeName);
+
+                    var nextInGi = Peek();
+
+                    if (nextInGi is not null && nextInGi.Kind == TokenKind.Comma)
+                    {
+                        _ = MoveNext();
+                        continue;
+                    }
+                    else if (nextInGi is not null && nextInGi.Kind == TokenKind.Gt)
+                    {
+                        _ = MoveNext();
+                        break;
+                    }
+                    else
+                    {
+                        throw ParseError(GetErrorBuilder()
+                            .WithMessage("expected comma after generic argument")
+                            .WithNote($"add a comma after parameter {types.Count}")
+                            .WithCode(LdErrorCode.ExpectedCommaOrCloseCroc)
+                            .Build());
+                    }
+                }
+
+                _ = Expect(TokenKind.ColonColon, GetErrorBuilder()
+                    .WithMessage("expected \"::\" after function generic arguments")
+                    .WithCode(LdErrorCode.ExpectedLeftParen)
+                    .WithNote("generic struct function syntax is like this:")
+                    .WithNote("Struct::function<Ts...>::(args...)")
+                    .Build());
+
+                _ = Expect(TokenKind.LeftParen, GetErrorBuilder()
+                    .WithMessage("expected left paren to begin function arguments")
+                    .WithCode(LdErrorCode.ExpectedLeftParen)
+                    .Build());
+
+                var argumentList = ParseArgumentList();
+
+                _ = Expect(TokenKind.RightParen, GetErrorBuilder()
+                    .WithMessage("expected a right paren to end generic function call")
+                    .WithCode(LdErrorCode.ExpectedLeftParen)
+                    .WithNote("add a closing \")\"")
+                    .Build());
+
+                return new StaticStructFunctionCallExpression(
+                    colonNotation.Path[0],
+                    colonNotation.Path[1],
+                    types,
+                    argumentList,
+                    colonNotation.Location);
             }
 
             return colonNotation;
@@ -1046,9 +1189,11 @@ public class Parser
             throw new ParserDoneException();
         }
 
+        // Just handles function calls right now.
         if (Matches(TokenKind.Identifier))
         {
             var identifier = Peek()!;
+            var next = PeekNext();
             // TODO: handle dot notation, colon notation aswell here.
 
             // NOTE: Assignment.Discard as an identifier means the interpreter should
@@ -1109,13 +1254,18 @@ public class Parser
             if (Matches(TokenKind.Comma))
             {
                 _ = MoveNext();
+                continue;
             }
-            else if (!Matches(TokenKind.RightBrace))
+            else if (Matches(TokenKind.RightBrace))
+            {
+                break;
+            }
+            else
             {
                 throw ParseError(GetErrorBuilder()
-                     .WithMessage("expected comma or closing brace.")
-                     .WithCode(LdErrorCode.ExpectedCommaOrCloseBrace)
-                     .Build());
+                    .WithMessage("expected comma or closing brace.")
+                    .WithCode(LdErrorCode.ExpectedCommaOrCloseBrace)
+                    .Build());
             }
         }
 
@@ -1292,14 +1442,11 @@ public class Parser
             .WithCode(LdErrorCode.ExpectedKeyword)
             .Build());
 
-        var identifier = Expect(TokenKind.Identifier, GetErrorBuilder()
-            .WithMessage("expected identifier after \"enum\" keyword.")
-            .WithCode(LdErrorCode.ExpectedIdentifier)
-            .WithNote("add an identifier after the word \"enum\".")
-            .Build());
+        var typeName = ParseTypename();
+        var identifier = typeName.Name;
 
         var _ = Expect(TokenKind.LeftBrace, GetErrorBuilder()
-            .WithMessage($"expect a left-brace after \"{identifier.Lexeme}\"")
+            .WithMessage($"expect a left-brace after \"{identifier}\"")
             .WithCode(LdErrorCode.ExpectedLeftBrace)
             .WithNote("this is because enums require a body.")
             .Build());
@@ -1309,7 +1456,7 @@ public class Parser
 
         if (next is not null && next.Kind == TokenKind.RightBrace)
         {
-            return new EnumDeclaration(identifier.Lexeme!, null, enumKeyword.Location);
+            return new EnumDeclaration(identifier, typeName.Generics, null, enumKeyword.Location);
         }
 
         while (true)
@@ -1700,6 +1847,16 @@ public class Parser
                 .WithNote($"install dependencies under \"{deps}\" for this project.")
                 .WithCode(LdErrorCode.NoModuleFound)
                 .Build());
+        }
+
+        var fileContents = File.ReadAllText(pathToModule);
+        var fileInfo = new FileInfo(pathToModule);
+        // lex then parse contents.
+        // these will exit on error so not a problem.
+
+        var moduleTokens = new Lexer(fileInfo).LexTokens();
+        var parser = new Parser(fileInfo.Name, _project, moduleTokens, fileContents);
+        return (parser.ParseTokens(), parser);
     }
 
     /// <summary>
@@ -1716,6 +1873,18 @@ public class Parser
     /// <exception cref="ParserDoneException"></exception>
     public AstNode ParseSomething()
     {
+        if (Matches(TokenKind.DebugBreak))
+        {
+            _ = MoveNext();
+            _ = new ParserDebugBreakExpression();
+        }
+
+        if (Matches(TokenKind.Use))
+        {
+            // NOTE: 
+            ParseUseStatement();
+        }
+
         if (Matches(TokenKind.Fn))
         {
             return ParseFunctionDeclaration();
@@ -1749,7 +1918,7 @@ public class Parser
     /// fails it will not return.
     /// </summary>
     /// <returns>The Ast.</returns>
-    public List<AstNode> ParseTokens()
+    public HashSet<AstNode> ParseTokens()
     {
         while (true)
         {
@@ -1952,5 +2121,40 @@ public class Parser
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Assert a condition. If condition fails, <paramref name="message"/> is displayed as an error.
+    /// </summary>
+    /// <param name="condition"></param>
+    /// <param name="message"></param>
+    private void ParseAssert(bool condition, ErrorMessage message)
+    {
+        if (!condition)
+            throw ParseError(message);
+    }
+
+    private AstNode? GetNodeWithName(string identifier)
+    {
+        return _ast.Where(x => x is Declaration)
+            .Where(x => (x as Declaration)!.Identifier == identifier)
+            .FirstOrDefault();
+    }
+
+    public Token? PeekAheadBy(int by)
+    {
+        var requestedPosition = _position + by;
+        if (requestedPosition >= _tokens.Count)
+            return null;
+        return _tokens[requestedPosition];
+    }
+
+    /// <summary>
+    /// Get the source file that this parser is parsing.
+    /// </summary>
+    /// <returns></returns>
+    public string GetFileName()
+    {
+        return _fileName;
     }
 }
