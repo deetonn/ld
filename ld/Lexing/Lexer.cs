@@ -244,6 +244,52 @@ public class Lexer
         };
     }
 
+    private void LexMultilineComment()
+    {
+        _ = Advance(); // first slash
+        _ = Advance(); // first star.
+
+        while (true)
+        {
+            var next = Peek();
+            var nextNext = PeekNext();
+
+            if (next == Star && nextNext == Slash)
+            {
+                _ = Advance(); // consume "*"
+                _ = Advance(); // consume "/"
+                break;
+            }
+
+            if (next == '\r' && nextNext == '\n')
+            {
+                _ = Advance(); // consume "\r"
+                _ = Advance(); // consume "\n"
+
+                _internals.Line += 1;
+                _internals.Column = 1;
+                _internals.Front += 2;
+                continue;
+            }
+
+            if (next == '\n')
+            {
+                _ = Advance(); // consume "\n"
+
+                _internals.Line += 1;
+                _internals.Column = 1;
+                _internals.Front++;
+                continue;
+            }
+
+            _internals.Column += 1;
+            _internals.Front += 1;
+            _ = Advance();
+        }
+
+        _internals.Back = _internals.Front;
+    }
+
     private Token? LexString(bool consumedFirstDelim)
     {
         var startCol = _internals.Column;
