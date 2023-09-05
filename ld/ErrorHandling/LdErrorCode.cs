@@ -33,5 +33,15 @@ public enum LdErrorCode
     ExpectedColonStructField,
     ExpectedCommaOrCloseBrace,
     OnlyFunctionsInImplStmts,
-    EnumVariantExpectedType
+    EnumVariantExpectedType,
+    ColonNotationOnStructsAndEnums,
+    NoModuleFound,
+    NoUseMembersSelected,
+    NoDeclarationFound,
+    TypeDoesNotExist,
+    ModuleHadErrors,
+    UnsupportedImport,
+    ExpectedDoubleColon,
+    ExpectedLt,
+    ExpectedCommaOrCloseCroc
 }
