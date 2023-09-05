@@ -192,7 +192,22 @@ public class Lexer
                     }
                     return MakeToken(TokenKind.Minus);
                 }
-            case Slash: return MakeToken(TokenKind.Slash);
+            case Slash:
+                {
+                    if (PeekNext() == Slash)
+                    {
+                        while (PeekNext() != '\n')
+                            Advance();
+                        // The "\n" will be consumed next line.
+                        return null;
+                    }
+                    if (PeekNext() == Star)
+                    {
+                        LexMultilineComment();
+                        return null;
+                    }
+                    return MakeToken(TokenKind.Slash);
+                };
             case Star: return MakeToken(TokenKind.Star);
             case Percent: return MakeToken(TokenKind.Modulo);
             case Pipe:
