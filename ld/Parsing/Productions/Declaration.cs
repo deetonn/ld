@@ -3,4 +3,4 @@ using Language.Lexing;
 
 namespace Language.Parsing.Productions;
 
-public record class Declaration(SourceLocation Location): AstNode(Location);
+public record class Declaration(string Identifier, SourceLocation Location): AstNode(Location);
