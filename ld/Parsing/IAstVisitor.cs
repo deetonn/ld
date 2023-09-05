@@ -61,6 +61,7 @@ public interface IAstVisitor
     /// </summary>
     /// <returns>The previous scope, once popped off the stack.</returns>
     public LdScope ExitContext();
+
     object VisitStructDeclaration(StructDeclaration structDeclaration);
     object VisitStructFieldDeclaration(StructFieldDeclaration structFieldDeclaration);
     object VisitImplStatement(ImplStatement implStatement);
@@ -69,5 +70,5 @@ public interface IAstVisitor
     object VisitEnumDeclaration(EnumDeclaration enumDeclaration);
     object VisitColonNotation(ColonNotation colonNotation);
     object VisitEnumVariantExpression(EnumVariantExpression enumVariantExpression);
-    object VisitStaticStructAccessExpression(StaticStructAccessExpression staticStructAccessExpression);
+    object VisitStaticStructAccessExpression(StaticStructFunctionCallExpression staticStructAccessExpression);
 }
