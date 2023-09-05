@@ -36,4 +36,8 @@ public class ScopeStack
     {
         return Scopes.Pop();
     }
+    public LdScope GetCurrent()
+    {
+        return Scopes.Peek();
+    }
 }

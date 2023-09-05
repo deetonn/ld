@@ -16,4 +16,25 @@ public class LdObject
     /// This is the underlying object.
     /// </summary>
     public object Underlying { get; protected set; }
+
+    private readonly Guid _refId;
+
+    public LdObject(object underlying)
+    {
+        Underlying = underlying;
+        _refId = Guid.NewGuid();
+    }
+
+    public bool IsCallable()
+        => GetType() == typeof(LdFunction);
+
+    public bool IsU32() => GetType() == typeof(LdU32);
+
+    /// <summary>
+    /// This object unique reference Id. If this is equal to
+    /// another <see cref="ReferenceId()"/> they are pointing to the
+    /// same instance.
+    /// </summary>
+    /// <returns>The object unique reference ID.</returns>
+    public Guid ReferenceId() => _refId;
 }

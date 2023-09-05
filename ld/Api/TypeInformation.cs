@@ -15,4 +15,10 @@ public class TypeInformation
         Name = name;
         Generics = generics;
     }
+
+    public bool IsBuiltinType()
+        => Name == "u32" || Name == "i32"
+        || Name == "u64" || Name == "i64"
+        || Name == "bool" || Name == "String"
+        || Name == "f32" || Name == "f64";
 }

@@ -21,6 +21,7 @@ public class LdFunction : LdObject
         Block body, 
         FunctionArguments expectedParams,
         TypeInformation? returnType)
+        : base(null!)
     {
         Underlying = body;
         Name = name;
@@ -30,7 +31,7 @@ public class LdFunction : LdObject
 
     public LdObject? Call(IAstVisitor context, List<Expression> arguments)
     {
-        var currentScope = new LdScope();
+        var currentScope = new LdScope(ScopeId.Unique($"<fn '{Name}'>"));
         context.SwitchContext(currentScope);
 
         context.ExitContext();
