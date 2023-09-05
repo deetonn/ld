@@ -29,7 +29,7 @@ public class ErrorMessage
 
         // The amount of spacing before the "^^^^"
         var padding = new string(' ', location.Column > 4 ? ((int)location.Column - 4) : (int)location.Column);
-        var arrowsPointingToContent = new string('^', (int)(location.Span.End - location.Span.Begin));
+        var arrowsPointingToContent = new string('^', NormalizeSpan(location.Span));
         var basePadding = 2 + location.Line.ToString().Length;
         var paddingForEmptyLines = new string(' ', basePadding);
         _message.AppendLine($" [red]{location.Line}[/] | {allLines[location.Line - 1]}");
@@ -45,6 +45,15 @@ public class ErrorMessage
         {
             _message.AppendLine($"{paddingForEmptyLines}= note: {note}");
         }
+    }
+
+    private int NormalizeSpan(Span span)
+    {
+        var total = span.End - span.Begin;
+        // check uint.MaxValue because they are unsigned.
+        if (total == uint.MaxValue)
+            return 1;
+        return (int)total;
     }
 
     public string GetMessage()
