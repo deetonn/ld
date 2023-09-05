@@ -1342,8 +1342,364 @@ public class Parser
             }
         }
 
-        RememberEnumDeclaration(identifier.Lexeme!);
-        return new EnumDeclaration(identifier.Lexeme!, variants, enumKeyword.Location);
+        RememberEnumDeclaration(identifier);
+        return new EnumDeclaration(identifier, typeName.Generics, variants, enumKeyword.Location);
+    }
+
+    public List<string> ParseUseStatementSelectedDeclList()
+    {
+        // example input: {get_data, SomeName, _AnotherName}
+        _ = Expect(TokenKind.LeftBrace, GetErrorBuilder()
+            .WithMessage("there is no selected members to import. use \"*\" wildcard to include all.")
+            .WithCode(LdErrorCode.NoUseMembersSelected)
+            .WithNote("if you don't want to import anything, remove this statement.")
+            .Build());
+
+        var identifiers = new List<string>();
+
+        while (!Matches(TokenKind.RightBrace))
+        {
+            var identifier = Expect(TokenKind.Identifier, GetErrorBuilder()
+                .WithMessage("expected identifier within use statement selected declaration list")
+                .WithCode(LdErrorCode.ExpectedIdentifier)
+                .WithNote("add an identifier here after the comma.")
+                .Build());
+            identifiers.Add(identifier.Lexeme!);
+
+            var next = Peek();
+            if (!Matches(TokenKind.Comma) 
+                && next is not null
+                && next.Kind != TokenKind.RightBrace)
+            {
+                throw ParseError(GetErrorBuilder()
+                    .WithMessage($"expected comma or right brace after \"{identifier.Lexeme}\"")
+                    .WithCode(LdErrorCode.ExpectedCommaOrCloseBrace)
+                    .WithNote("add a comma after this identifier or remove it.")
+                    .WithNote($"got {next.Kind}")
+                    .Build());
+            }
+            else if (next is not null 
+                && next.Kind == TokenKind.RightBrace)
+            {
+                _ = MoveNext(); // consume right brace.
+                break;
+            }
+            _ = MoveNext(); // consume comma.
+        }
+
+        return identifiers;
+    }
+
+    /// <summary>
+    /// This function parses a use statement.
+    /// This entire process happens in here, instead of
+    /// there being a production for this, at parse time
+    /// the module is imported, lexed and then parsed. We then
+    /// process what members are wanted an insert them
+    /// directly into the AST.
+    /// </summary>
+    public void ParseUseStatement()
+    {
+        var useKeyword = Expect(TokenKind.Use, GetErrorBuilder()
+            .WithMessage("expected \"use\" keyword.")
+            .WithCode(LdErrorCode.ExpectedKeyword)
+            .Build());
+
+        var firstIdentifier = Expect(TokenKind.Identifier, GetErrorBuilder()
+            .WithMessage("expected at least one identifier after \"use\" keyword.")
+            .WithCode(LdErrorCode.ExpectedIdentifier)
+            .WithNote("you cannot \"use\" nothing.")
+            .Build());
+
+        var path = new List<string>() { firstIdentifier.Lexeme! };
+        bool wildcard = false;
+        List<string>? selectedDeclarations = null;
+
+        while (Matches(TokenKind.ColonColon))
+        {
+            _ = MoveNext(); // skip "::"
+
+            if (Matches(TokenKind.Star))
+            {
+                _ = MoveNext();
+                wildcard = true;
+                break;
+            }
+
+            if (Matches(TokenKind.LeftBrace))
+            {
+                selectedDeclarations = ParseUseStatementSelectedDeclList();
+                break;
+            }
+
+            path.Add(Expect(TokenKind.Identifier, GetErrorBuilder()
+                .WithMessage("expected identifier \"::\".")
+                .WithCode(LdErrorCode.ExpectedIdentifier)
+                .Build()).Lexeme!);
+        }
+
+        var systemSeperator = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? "\\" : "/";
+        // NOTE: effectively rebuild the original but instead of
+        //       "::" we use the systems path seperator.
+        var simplifiedPath = string.Join(systemSeperator, path);
+        // NOTE: if the module is invalid or does not exist, this function
+        //       will deal with that. We are only still here if the module is
+        //       valid.
+        var (moduleAst, parser) = ParseOtherModule(simplifiedPath);
+
+        if (wildcard)
+        {
+            // dump the entire modules AST into the current
+            // ast.
+            _ast.AddRange(moduleAst);
+        }
+        else
+        {
+            // We need to filter through the selected
+            // declarations and add them.
+            var selectedAstNodes = new List<AstNode>();
+
+            ParseAssert(selectedDeclarations is not null, GetErrorBuilder()
+                .WithMessage("there are no selected declarations to import from this module.")
+                .WithCode(LdErrorCode.ExpectedIdentifier)
+                .Build());
+
+            foreach (var selected in selectedDeclarations!)
+            {
+                var declarationsWithMatchingName = moduleAst
+                    .Where(x => x is Declaration)
+                    .Where(x => (x as Declaration)!.Identifier == selected);
+
+                if (!declarationsWithMatchingName.Any())
+                {
+                    throw ParseError(GetErrorBuilder()
+                        .WithMessage($"the module \"{simplifiedPath}\" contains no declaration \"{selected}\".")
+                        .WithCode(LdErrorCode.NoDeclarationFound)
+                        .Build());
+                }
+
+                var declaration = (declarationsWithMatchingName.First() as Declaration)!;
+
+                ImportDeclarationWithRequirements(parser, declaration);
+            }
+        }
+
+
+    }
+
+    public void ImportDeclarationWithRequirements(Parser module, Declaration declaration)
+    {
+        if (declaration is StructDeclaration @struct)
+        {
+            if (StructExists(@struct.Identifier))
+            {
+                ParseWarning(GetWarningBuilder()
+                    .WithMessage($"the type \"{@struct.Identifier}\" has already been imported.")
+                    .WithNote("remove this from the use statement.")
+                    .Build());
+                return; // the type already exists.
+            }
+            RememberStructDeclaration(@struct.Identifier);
+
+            foreach (var property in @struct.Fields)
+            {
+                if (property.Type.IsBuiltinType())
+                    continue;
+                var type = property.Type;
+
+                // already exists in this scope.
+                if (StructExists(type.Name) || EnumExists(type.Name))
+                    continue;
+
+                if (module.StructExists(type.Name))
+                {
+                    var referencedStruct = GetNodeWithName(type.Name)!;
+                    ImportDeclarationWithRequirements(module, (Declaration)referencedStruct);
+                    _ast.Add(referencedStruct);
+                    continue;
+                }
+
+                if (module.EnumExists(type.Name))
+                {
+                    var referencedEnum = GetNodeWithName(type.Name)!;
+                    ImportDeclarationWithRequirements(module, (Declaration)referencedEnum);
+                    _ast.Add(referencedEnum);
+                    continue;
+                }
+
+                throw ParseError(GetErrorBuilder()
+                    .WithMessage($"the module \"{module.GetFileName()}\" has errors.")
+                    .WithCode(LdErrorCode.ModuleHadErrors)
+                    .WithNote($"[[{module.GetFileName()}]]::{type.Name} was not found.")
+                    .WithNote($"this type is referenced inside if the struct \"{declaration.Identifier}\".")
+                    .Build());
+            }
+
+            // once we are here, all of the required declarations
+            // are within our AST. Now we can safely add the declaration.
+            _ast.Add(declaration);
+            return;
+        }
+        if (declaration is EnumDeclaration @enum)
+        {
+            if (EnumExists(@enum.Identifier))
+            {
+                ParseWarning(GetWarningBuilder()
+                    .WithMessage("this enum has already been imported.")
+                    .WithNote("consider remove this from your use statement.")
+                    .Build());
+                return; // the enum has already been imported.
+            }
+
+            RememberEnumDeclaration(@enum.Identifier);
+
+            if (@enum.Variants is null)
+            {
+                // the enum is empty.
+                _ast.Add(@enum);
+                return;
+            }
+
+            bool hasGenericParameters = @enum.Generics?.Count > 0;
+
+            foreach (var variant in @enum.Variants)
+            {
+                if (variant.TaggedTypes is null)
+                    continue;
+
+                foreach (var taggedType in variant.TaggedTypes)
+                {
+                    if (taggedType.IsBuiltinType())
+                        continue;
+
+                    var identifier = taggedType.Name;
+
+                    // already exists in this scope.
+                    if (StructExists(identifier) || EnumExists(identifier))
+                        continue;
+
+                    if (hasGenericParameters)
+                    {
+                        if (@enum.Generics!.Any(x => x.Name == identifier))
+                            continue;
+                    }
+
+                    if (module.StructExists(identifier))
+                    {
+                        var structDeclaration = module.GetNodeWithName(identifier)!;
+                        ImportDeclarationWithRequirements(module, (Declaration)structDeclaration!);
+                        _ast.Add(structDeclaration);
+                        continue;
+                    }
+
+                    if (module.EnumExists(identifier))
+                    {
+                        var enumDeclaration = module.GetNodeWithName(identifier)!;
+                        ImportDeclarationWithRequirements(module, (Declaration)enumDeclaration);
+                        _ast.Add(enumDeclaration);
+                        continue;
+                    }
+
+                    throw ParseError(GetErrorBuilder()
+                        .WithMessage($"the module \"{module.GetFileName()}\" has errors.")
+                        .WithCode(LdErrorCode.ModuleHadErrors)
+                        .WithNote($"[[{module.GetFileName()}]]::{identifier} was not found.")
+                        .WithNote($"this type is referenced inside if the enum \"{declaration.Identifier}\".")
+                        .Build());
+                }
+            }
+
+            _ast.Add(@enum);
+            return;
+        }
+        if (declaration is FunctionDeclaration function)
+        {
+            bool hasGenerics = function.GenericParams?.Count > 0;
+
+            // first check the return type.
+            // NOTE: the "?? true" is because when ReturnType
+            //       is null, it is void. That is fine.
+            if (function.ReturnType is not null
+                && !function.ReturnType.IsBuiltinType()
+                && !EnumExists(function.ReturnType.Name)
+                && !StructExists(function.ReturnType.Name))
+            {
+                if (module.EnumExists(function.ReturnType.Name)
+                    || module.StructExists(function.ReturnType.Name))
+                {
+                    var decl = module.GetNodeWithName(function.ReturnType.Name);
+                    ImportDeclarationWithRequirements(module, (Declaration)decl!);
+                    _ast.Add(decl!);
+                }
+                else
+                {
+                    throw ParseError(GetErrorBuilder()
+                        .WithMessage($"the function \"{function.Identifier}\" in module \"{module.GetFileName()}\" has an invalid return type.")
+                        .WithNote($"the type \"{function.ReturnType.Name}\" is unknown")
+                        .WithCode(LdErrorCode.ModuleHadErrors)
+                        .Build());
+                }
+            }
+
+            if (function.Parameters is null)
+            {
+                // no parameters.
+                _ast.Add(function);
+                return;
+            }
+
+            foreach (var parameter in function.Parameters)
+            {
+                if (!parameter.Type.IsBuiltinType()
+                    && !EnumExists(parameter.Identifier)
+                    && !StructExists(parameter.Identifier))
+                {
+                    if (!module.StructExists(parameter.Identifier)
+                        && !module.EnumExists(parameter.Identifier))
+                    {
+                        throw ParseError(GetErrorBuilder()
+                            .WithMessage($"the function \"{function.Identifier}\" has an invalid parameter.")
+                            .WithCode(LdErrorCode.ModuleHadErrors)
+                            .WithNote($"its parameter \"{parameter.Identifier}\" uses an unknown type.")
+                            .WithNote($"the unknown type is \"{parameter.Type.Name}\"")
+                            .Build());
+                    }
+
+                    var node = module.GetNodeWithName(parameter.Type.Name)!;
+                    ImportDeclarationWithRequirements(module, (Declaration)node!);
+                    _ast.Add(node!);
+                }
+            }
+
+            _ast.Add(function);
+            return;
+        }
+
+        throw ParseError(GetErrorBuilder()
+            .WithMessage($"you cannot import \"{declaration.Identifier}\"")
+            .WithCode(LdErrorCode.UnsupportedImport)
+            .WithNote("this is because it is not a struct, enum or function.")
+            .Build());
+    }
+
+    /// <summary>
+    /// This will parse another module then return the state.
+    /// </summary>
+    /// <param name="relativePath">The path, relative to the project</param>
+    /// <returns>The AST and the parser state</returns>
+    private (HashSet<AstNode>, Parser) ParseOtherModule(string relativePath)
+    {
+        var deps = _project.DependenciesDir;
+        var pathToModule = Path.Combine(deps, relativePath) + ".ld";
+
+        if (!File.Exists(pathToModule))
+        {
+            throw ParseError(GetErrorBuilder()
+                .WithMessage($"no such module \"{relativePath}\"")
+                .WithNote($"install dependencies under \"{deps}\" for this project.")
+                .WithCode(LdErrorCode.NoModuleFound)
+                .Build());
     }
 
     /// <summary>
