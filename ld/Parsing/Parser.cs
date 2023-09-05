@@ -597,6 +597,7 @@ public class Parser
         return expressions;
     }
 
+    {
     /// <summary>
     /// This will parse a primary expression. A primary is expression is any of the follwing.
     /// EnumVariantExpression (Enum::Variant(...)), StaticStructAccessExpression (Struct::function(...)),
