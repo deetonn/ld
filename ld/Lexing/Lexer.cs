@@ -89,7 +89,7 @@ public class Lexer
                 {
                     _internals.Line += 1;
                     _internals.Column = 1;
-                    _internals.Back = _internals.Front;
+                    _internals.Back = _internals.Front + 1;
                     return null;
                 }
             // fuck windows man fr
@@ -101,9 +101,11 @@ public class Lexer
                         _ = Advance();
                         _internals.Line += 1;
                         _internals.Column = 1;
-                        _internals.Back = _internals.Front;
+                        _internals.Back = _internals.Front + 2;
                         return null;
                     }
+                    _internals.Column++;
+                    _internals.Front++;
                     return null;
                 }
             case EqualsSign:
