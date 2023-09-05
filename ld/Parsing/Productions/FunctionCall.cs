@@ -1,10 +1,11 @@
 ﻿
+using Language.Api;
 using Language.Lexing;
 using Spectre.Console;
 
 namespace Language.Parsing.Productions;
 
-public record class FunctionCall(string Identifier, List<Expression>? Arguments, SourceLocation Location)
+public record class FunctionCall(string Identifier, List<TypeInformation>? Generics, List<Expression>? Arguments, SourceLocation Location)
     : Expression(Location)
 {
     public override object Visit(IAstVisitor visitor)
