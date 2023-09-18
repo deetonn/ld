@@ -47,7 +47,7 @@ public class ErrorMessage
         }
     }
 
-    private int NormalizeSpan(Span span)
+    private static int NormalizeSpan(Span span)
     {
         var total = span.End - span.Begin;
         // check uint.MaxValue because they are unsigned.
@@ -147,7 +147,7 @@ public class ErrorBuilder
     public ErrorMessage Build()
     {
         var location = _location ?? throw new ArgumentException("errors require a source location.");
-        return new ErrorMessage(_code, _source, location, _message, _notes.Any() ? _notes : null);
+        return new ErrorMessage(_code, _source, location, _message, _notes.Count != 0 ? _notes : null);
     }
 }
 public class WarningBuilder
@@ -184,7 +184,7 @@ public class WarningBuilder
     public WarningMessage Build()
     {
         var location = _location ?? throw new ArgumentException("errors require a source location.");
-        return new WarningMessage(_source, location, _message, _notes.Any() ? _notes : null);
+        return new WarningMessage(_source, location, _message, _notes.Count != 0 ? _notes : null);
     }
 }
 
