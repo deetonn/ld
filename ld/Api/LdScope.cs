@@ -23,7 +23,7 @@ public class ScopeId
 
 public class LdScope 
 {
-    private readonly IDictionary<string, LdObject> _thisScope;
+    private readonly Dictionary<string, LdObject> _thisScope;
     private ScopeId _id;
 
     public LdScope(ScopeId id)
@@ -41,9 +41,9 @@ public class LdScope
 
     public LdObject Store(string identifier, LdObject value)
     {
-        if (_thisScope.ContainsKey(identifier))
+        if (_thisScope.TryGetValue(identifier, out LdObject? old_value))
         {
-            var old = _thisScope[identifier];
+            var old = old_value;
             _thisScope[identifier] = value;
             return old;
         }
