@@ -35,4 +35,6 @@ public class StorageDeclarationsRegistry
 
         return null;
     }
+
+    public List<Declaration> Declarations() => _declarations;
 }

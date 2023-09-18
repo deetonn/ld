@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Language</RootNamespace>
+    <AnalysisLevel>latest-minimum</AnalysisLevel>
   </PropertyGroup>
 
   <ItemGroup>
