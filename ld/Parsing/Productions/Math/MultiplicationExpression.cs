@@ -5,7 +5,7 @@ using Spectre.Console;
 namespace Language.Parsing.Productions.Math;
 
 public record class MultiplicationExpression(Expression Left, Expression Right, SourceLocation Location)
-    : Expression(Location)
+    : MathematicalExpression(Left, Right, Location)
 {
     public override object Visit(IAstVisitor visitor)
     {
