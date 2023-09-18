@@ -71,7 +71,7 @@ public class Parser
             .WithCode(LdErrorCode.ExpectedIdentifier)
             .Build());
 
-        var typeInfo = new TypeInformation(identifier.Lexeme!, 0);
+        var typeInfo = new TypeInformation(identifier.Lexeme!);
 
         if (Matches(TokenKind.Lt))
         {
@@ -1546,12 +1546,6 @@ public class Parser
         return new EnumDeclaration(identifier, typeName.Generics, variants, enumKeyword.Location);
     }
 
-    /// <summary>
-    /// This parses specific selections from within a use statement.
-    /// If the input was: {data, Parser, SomeEnum}
-    /// We would return [data, Parser, SomeEnum] in the list.
-    /// </summary>
-    /// <returns></returns>
     public List<string> ParseUseStatementSelectedDeclList()
     {
         // example input: {get_data, SomeName, _AnotherName}
@@ -1694,13 +1688,6 @@ public class Parser
 
     }
 
-    /// <summary>
-    /// This function will import <paramref name="declaration"/> into this
-    /// current context, this will shadow import anything that <paramref name="declaration"/> requires from 
-    /// <paramref name="module"/>. 
-    /// </summary>
-    /// <param name="module">The parsed module</param>
-    /// <param name="declaration">The declaration to import with its requirements.</param>
     public void ImportDeclarationWithRequirements(Parser module, Declaration declaration)
     {
         if (declaration is StructDeclaration @struct)
@@ -2071,24 +2058,13 @@ public class Parser
         return false;
     }
 
-    public bool MatchesAny(params TokenKind[] kinds)
-    {
-        foreach (var item in kinds)
-        {
-            if (Matches(item))
-                return true;
-        }
-
-        return false;
-    }
-
     /// <summary>
     /// Creates a parser error then exits if asked to.
     /// </summary>
     /// <param name="message">The error message.</param>
     /// <param name="exitNow">Should we exit on this error?</param>
     /// <returns>An exception for control flow.</returns>
-    private static Exception ParseError(ErrorMessage message, bool exitNow = true)
+    private Exception ParseError(ErrorMessage message, bool exitNow = true)
     {
         ErrorHandler.QueueNow(message);
         
@@ -2205,18 +2181,12 @@ public class Parser
     /// </summary>
     /// <param name="condition"></param>
     /// <param name="message"></param>
-    private static void ParseAssert(bool condition, ErrorMessage message)
+    private void ParseAssert(bool condition, ErrorMessage message)
     {
         if (!condition)
             throw ParseError(message);
     }
 
-    /// <summary>
-    /// Will find any node that has a name matching <paramref name="identifier"/>.
-    /// This will only search declarations.
-    /// </summary>
-    /// <param name="identifier"></param>
-    /// <returns>The node, otherwise null</returns>
     private AstNode? GetNodeWithName(string identifier)
     {
         return _ast.Where(x => x is Declaration)
@@ -2224,11 +2194,6 @@ public class Parser
             .FirstOrDefault();
     }
 
-    /// <summary>
-    /// Peek at the current position + <paramref name="by"/>.
-    /// </summary>
-    /// <param name="by"></param>
-    /// <returns>The token at that position, otherwise null</returns>
     public Token? PeekAheadBy(int by)
     {
         var requestedPosition = _position + by;

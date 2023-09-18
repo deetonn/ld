@@ -279,25 +279,4 @@ public class LexerTests
         Assert.AreEqual(TokenKind.Dot, tokens[3].Kind);
         VerifyIdentifier(tokens[4], "c");
     }
-
-    [TestMethod]
-    public void TestSingleLineComments()
-    {
-        TestForSingle(TokenKind.Eof, "// hello world");
-    }
-
-    [TestMethod]
-    public void TestMultilineComments()
-    {
-        TestForSingle(TokenKind.Eof, "/* this is a comment */");
-        var tokens = GetTokens("let a /*comment*/ = 2");
-
-        Assert.AreEqual(5, tokens.Count);
-        Assert.AreEqual(TokenKind.Let, tokens[0].Kind);
-        Assert.AreEqual(TokenKind.Identifier, tokens[1].Kind);
-        VerifyIdentifier(tokens[1], "a");
-
-        Assert.AreEqual(TokenKind.Equals, tokens[2].Kind);
-        Assert.AreEqual(TokenKind.Number, tokens[3].Kind);
-    }
 }

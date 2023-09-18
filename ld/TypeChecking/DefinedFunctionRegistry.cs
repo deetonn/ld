@@ -20,6 +20,4 @@ public class DefinedFunctionRegistry
     {
         return _functions.FirstOrDefault(x => x.Identifier == ident);   
     }
-
-    public List<FunctionDeclaration> Functions() => _functions;
 }

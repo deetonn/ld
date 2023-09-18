@@ -16,17 +16,16 @@ var projectDetails = new ProjectDetails($"C:\\Users\\{Environment.UserName}\\sou
     $"C:\\Users\\{Environment.UserName}\\source\\repos\\ld\\playground\\deps");
 
 var tokens = TimedExpression("[yellow]lexer[/]", lexer.LexTokens);
-// tokens?.ForEach(Console.WriteLine);
 var fileContents = File.ReadAllText(fileInfo.FullName);
 var ast = TimedExpression("[cyan]parser[/]", () => new Parser(fileInfo.Name, projectDetails, tokens, fileContents).ParseTokens());
 
-var checker = TimedExpression("[red]typechecker[/]", () => new TypeChecker(ast.ToList(), fileContents));
-var checkedAst = checker.Check();
-
-foreach (var node in checkedAst)
+foreach (var node in ast)
 {
     node.Visualize(string.Empty, false);
 }
+
+var checker = TimedExpression("[red]typechecker[/]", () => new TypeChecker(ast.ToList(), fileContents));
+checker.Check();
 
 static T TimedExpression<T>(string name, Func<T> f)
 {
