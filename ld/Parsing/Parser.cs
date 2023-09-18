@@ -500,6 +500,7 @@ public class Parser
             {
                 if (nextToken.Kind is TokenKind.RightParen)
                 {
+                    arguments.Add(expression);
                     break;
                 }
                 if (nextToken.Kind is TokenKind.Eof)
