@@ -25,7 +25,7 @@ public record class Assignment(
     {
         indent = ShowIndent(indent, last);
         string mutable = IsMutable ? "Mutable" : "Immutable";
-        AnsiConsole.MarkupLine($"(Assignment of \"{Identifier}\", {mutable})");
+        AnsiConsole.MarkupLine($"(Assignment of \"{Identifier}\", {mutable}, {AnnotatedType?.Name})");
         Expression?.Visualize(indent, true);
     }
 
