@@ -356,6 +356,47 @@ public class Parser
     }
 
     /// <summary>
+    /// This will parse an exponention math expression.
+    /// Meaning the expression can be quite large.
+    /// Example input: 29 + 239 / 24 % 2
+    /// </summary>
+    /// <returns></returns>
+    public Expression ParseMathExpressionExponential()
+    {
+        var expressions = new List<Expression>
+        {
+            // add the initial expression that led us here.
+            ParseMathExpression()
+        };
+
+        while (MatchesAny(_mathTokens))
+        {
+            var operand = PeekThenAdvance()!;
+            var nextOperandMaybe = PeekNext();
+            if (nextOperandMaybe is not null 
+                && !_mathTokens.Contains(nextOperandMaybe.Kind))
+            {
+                // this is something like -- 10 + 2 + 24
+                // so we mutate the first addition to be
+                // ((10 + 2) + 24) so its a single expression.
+                var first = expressions.Last();
+                var expr = ParseExpression() ?? throw ParseError(GetErrorBuilder()
+                    .WithMessage($"expected expression after \"{operand.Kind}\".")
+                    .Build());
+                expressions.Add(MathematicOperatorHandler(operand,
+                    first,
+                    expr));
+                continue;
+            }
+            expressions.Add(ParseMathExpression());
+        }
+
+        return new GroupingExpression(
+            expressions,
+            expressions.First().Location);
+    }
+
+    /// <summary>
     /// This will parse a basic mathematical expression.
     /// Example input: 19 + 248472
     /// </summary>
