@@ -1038,6 +1038,12 @@ public class Parser
     /// <returns>The parameter, this function uses ParseError.</returns>
     public FunctionDeclarationParameter ParseFunctionDeclarationParameter() 
     {
+        if (Matches(TokenKind.SelfValue))
+        {
+            var selfKeyword = MoveNext();
+            return new FunctionDeclarationParameter("self", new TypeInformation("Self", 0), selfKeyword.Location);
+        }
+
         var identifier = PeekThenAdvance() ?? throw ParseError(GetErrorBuilder()
             .WithMessage("expected identifier for function parameter.")
             .WithCode(LdErrorCode.ExpectedIdentifier)
