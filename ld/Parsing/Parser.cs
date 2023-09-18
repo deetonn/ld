@@ -432,6 +432,11 @@ public class Parser
             .WithCode(LdErrorCode.ExpectedExpressionReasonMathematical)
             .Build());
 
+        return MathematicOperatorHandler(@operator, leftExpr, rightExpr);
+    }
+
+    public Expression MathematicOperatorHandler(Token @operator, Expression leftExpr, Expression rightExpr)
+    {
         return @operator.Kind switch
         {
             TokenKind.Plus => new AdditionExpression(leftExpr, rightExpr, @operator.Location),
