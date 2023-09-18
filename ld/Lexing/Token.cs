@@ -35,6 +35,11 @@ public class SourceLocation
     {
         return $"SourceLocation {{ File = {File}, Line = {Line}, Column = {Column}, Span = {Span} }}";
     }
+
+    public string ToUserString()
+    {
+        return $"[[src/{File}:{Line}:{Column}]]";
+    }
 }
 
 public class Token
