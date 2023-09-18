@@ -1412,7 +1412,7 @@ public class Parser
         while (true)
         {
             var typeName = ParseTypename() ?? throw ParseError(GetErrorBuilder()
-                    .WithMessage(taggedTypes.Any() ? messageWithTaggedTypes : messageWithNoTaggedTypes)
+                    .WithMessage(taggedTypes.Count != 0 ? messageWithTaggedTypes : messageWithNoTaggedTypes)
                     .WithCode(LdErrorCode.EnumVariantExpectedType)
                     .WithNote("if you wish to have no type here, remove the parenthesis or comma.")
                     .Build());
