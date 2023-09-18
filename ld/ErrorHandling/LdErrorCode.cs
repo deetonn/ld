@@ -43,5 +43,20 @@ public enum LdErrorCode
     UnsupportedImport,
     ExpectedDoubleColon,
     ExpectedLt,
-    ExpectedCommaOrCloseCroc
+    ExpectedCommaOrCloseCroc,
+
+    TypeCheckerError = 2500,
+    UndefinedType,
+    SelfOnUnattachedFunction,
+    CouldNotInferType,
+    NotAnExpression,
+    UndefinedIdentifier,
+    CannotCallNonFunctionType,
+    UndefinedImplFunction,
+    EnumInitializedAsStruct,
+    InvalidTypeAssignment,
+    InvalidReturn,
+    NoExpectedParameters,
+    NoImplicitCasts,
+    InvalidMathContext
 }
