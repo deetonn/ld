@@ -2,7 +2,7 @@
 struct IoError {}
 
 /*
-  The basic IO result. This always returns IoError.
+  The basic IO result. This always returns IoError on Err variant.
   This allows for flawless I/O code propogating errors.
 */
 enum Result<T> {
