@@ -270,7 +270,7 @@ public class Parser
         // is a mathematical expression.
         if (_mathTokens.Contains(next.Kind))
         {
-            return ParseMathExpression();
+            return ParseMathExpressionExponential();
         }
 
         if (_conditionalOperators.Contains(next.Kind))
